@@ -1,0 +1,70 @@
+#-------------------------- Initial Setup -------------------------------------#
+log KA_strain_loop_long.log
+units       lj
+atom_style  atomic
+dimension   3
+boundary    p p p
+timestep    0.01
+#------------------------------------------------------------------------------#
+#-------------------------- Atomic Setup --------------------------------------#
+region film block 0 140 0 8 0 6 
+create_box 2 film 
+create_atoms 1 random 5040 2 film
+create_atoms 2 random 5040 10002 film
+neigh_modify every 1 delay 0 check yes
+mass 1 1
+mass 2 1
+pair_style lj/cut 2.5
+pair_coeff 1 1 1 1 1.5
+pair_coeff 1 2 1.5 .8 2
+pair_coeff 2 2 0.5 .88 2.2
+minimize 1.0e-4 1.0e-6 1000 1000
+#-------------------------------- Outputs -------------------------------------#
+compute stress all centroid/stress/atom NULL
+compute press all pressure NULL pair
+compute tot_stress1 all reduce sum c_stress[1]
+compute tot_stress2 all reduce sum c_stress[2]
+compute tot_stress3 all reduce sum c_stress[3]
+compute tot_stress4 all reduce sum c_stress[4]
+compute tot_stress5 all reduce sum c_stress[5]
+compute tot_stress6 all reduce sum c_stress[6]
+compute tot_stress7 all reduce sum c_stress[7]
+compute tot_stress8 all reduce sum c_stress[8]
+compute tot_stress9 all reduce sum c_stress[9]
+
+thermo 1000
+#dump 1 all atom 1000 traj_KA.out 
+dump 3 all xyz 1000 traj_KA_strain_loop.xyz
+#dump_modify 1 sort id append yes
+#dump_modify 2 sort c_stress[*] append yess
+#dump 2 all custom 1000 stress_3.out c_stress[*]
+thermo_style custom step temp press density lx ly lz c_tot_stress1 
+#c_tot_stress2 c_tot_stress3 c_tot_stress4 c_tot_stress5 c_tot_stress6 c_tot_stress7 c_tot_stress8 #c_tot_stress9
+
+#------------------------------------------------------------------------------#
+#------------------------- Running the Simulation -----------------------------#
+fix 1 all nve/limit 0.1
+fix 2 all langevin 2.0 2.0 0.5 1530917 zero yes
+velocity all create 2.0 4928351 mom yes rot yes dist gaussian
+run 10000
+unfix 1 
+unfix 2
+
+#------------------------------------------------------------------------------#
+fix 10 all nvt temp 3 0.03 $(100.0*dt)
+run 10000
+unfix 10
+change_box all y final -40 40
+fix 20 all npt temp 0.03 0.03 $(100.0*dt) z 0 0 $(100.0*dt) x 0 0 $(100.0*dt)
+run 300000
+unfix 20
+fix 40 all nvt temp 0.03 0.03 $(100.0*dt)
+run 10000
+fix 50 all deform 1 x scale 0.714 remap x units box 
+run 100000
+unfix 50 
+fix 60 all deform 1 x wiggle 40 $(2*100000.0*dt) remap x units box 
+run 2000000
+
+
+write_dump all atom KA_strain_loop_final.out
